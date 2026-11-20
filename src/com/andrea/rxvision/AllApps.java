@@ -96,7 +96,7 @@ final class AllApps extends LinearLayout {
         settingsLink.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
         settingsLink.setTextColor(theme.fg(0x99));
         settingsLink.setPadding((int) (12 * dp), (int) (8 * dp), 0, (int) (8 * dp));
-        settingsLink.setOnClickListener(v -> showSettings(!settingsOpen(), true));
+        settingsLink.setOnClickListener(v -> { if (picking != null) donePicking(); else showSettings(!settingsOpen(), true); });
         head.addView(settingsLink);
         addView(head, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
@@ -167,7 +167,7 @@ final class AllApps extends LinearLayout {
             Apps.save(getContext(), favourites);
             host.favouritesChanged();
             render();
-        });
+        }, this::pickFolder);
         v.addView(ringEditor);
         return v;
     }
@@ -177,6 +177,31 @@ final class AllApps extends LinearLayout {
     boolean settingsOpen() { return settings.getVisibility() == VISIBLE; }
 
     /** Swaps the app list for the settings; with keyboard, also hides or brings back the keyboard to match. */
+    /** Picking a folder's apps: the list with "add to <favourite>…"; a tap puts an app in its folder or takes it out. */
+    private Apps.App picking;
+
+    boolean picking() { return picking != null; }
+
+    private void pickFolder(Apps.App favourite) {
+        picking = favourite;
+        showSettings(false, true);
+        query.setText("");
+        query.setHint("add to " + favourite.label + "…");
+        settingsLink.setText("done");
+        rows.clear();
+        render();
+    }
+
+    void donePicking() {
+        picking = null;
+        query.setText("");
+        query.setHint("open…");
+        rows.clear();
+        render();
+        ringEditor.setFavourites(favourites);
+        showSettings(true, true);
+    }
+
     void showSettings(boolean on, boolean keyboard) {
         settings.setVisibility(on ? VISIBLE : GONE);
         scroll.setVisibility(on ? GONE : VISIBLE);
@@ -276,29 +301,49 @@ final class AllApps extends LinearLayout {
         name.setSingleLine();
         row.addView(name, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
 
-        if (Apps.isFavourite(favourites, app)) { // a small ink drop: it's in the ring
-            View dot = new View(getContext());
+        if (picking != null ? Apps.isFavourite(picking.folder, app) : Apps.isFavourite(favourites, app)) {
+            View dot = new View(getContext()); // a small ink drop: it's in the ring (or, picking, in the folder)
             GradientDrawable d = new GradientDrawable();
             d.setShape(GradientDrawable.OVAL);
-            d.setColor(INK);
+            d.setColor(picking != null ? theme.accent : INK);
             dot.setBackground(d);
             row.addView(dot, new LayoutParams((int) (7 * dp), (int) (7 * dp)));
         }
 
-        row.setOnClickListener(v -> open(v, app));
+        row.setOnClickListener(v -> {
+            if (picking == null) { open(v, app); return; }
+            if (app.component.equals(picking.component)) return;
+            if (!Apps.toggleFolder(getContext(), picking, app)) {
+                Toast.makeText(getContext(), "A folder holds " + Apps.MAX_FOLDER, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+            host.favouritesChanged();
+            redraw(v, app);
+        });
         row.setOnLongClickListener(v -> {
+            if (picking != null) return false;
             if (!Apps.toggle(getContext(), favourites, app)) {
                 Toast.makeText(getContext(), "The ring holds " + Apps.MAX_FAVOURITES + ": long-press one to remove it first", Toast.LENGTH_SHORT).show();
                 return true;
             }
             v.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
             host.favouritesChanged();
-            rows.remove(app.component); // its ink dot changed
             ringEditor.setFavourites(favourites);
-            render();
+            redraw(v, app);
             return true;
         });
         return row;
+    }
+
+    /** Rebuilds just this row (its dot changed), in place: the list doesn't reload or jump. */
+    private void redraw(View old, Apps.App app) {
+        int at = list.indexOfChild(old);
+        View fresh = row(app);
+        ((View) fresh.getTag()).setVisibility(((View) old.getTag()).getVisibility()); // keeps the "↵ opens this" mark
+        rows.put(app.component, fresh);
+        list.removeViewAt(at);
+        list.addView(fresh, at);
     }
 
     /** The first rows rise and fade in one after another, from delay ms, each step ms after the one above. */
@@ -377,7 +422,12 @@ final class AllApps extends LinearLayout {
     void hide(boolean animated) {
         query.getWindowInsetsController().hide(WindowInsets.Type.ime());
         opened = false;
-        Runnable done = () -> { setVisibility(GONE); query.setText(""); showSettings(false, false); };
+        Runnable done = () -> {
+            setVisibility(GONE);
+            if (picking != null) { picking = null; query.setHint("open…"); rows.clear(); }
+            query.setText("");
+            showSettings(false, false);
+        };
         host.uncovered();
         if (!animated || getWidth() == 0) { if (reveal != null) reveal.cancel(); done.run(); return; }
         reveal(false, done);

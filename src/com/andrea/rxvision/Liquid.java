@@ -51,6 +51,9 @@ final class Liquid extends View {
         int color;
         long at; // doesn't move before this uptime: staggers the drops
         Apps.App app;
+        /** A favourite's folder drops (bumps on its edge until it's hovered); and, for those, their favourite. */
+        final List<Drop> subs = new ArrayList<>();
+        Drop parent;
 
         void step() { step(0.075f, 0.8f); }
 
@@ -130,7 +133,12 @@ final class Liquid extends View {
         ink = new View(ctx) {
             @Override protected void onDraw(Canvas c) {
                 drawStrand(c, true);
-                for (Drop d : drops) { circle(c, d.x, d.y, d.r, d.color); tail(c, d, d.r); }
+                for (Drop d : drops) {
+                    circle(c, d.x, d.y, d.r, d.color);
+                    tail(c, d, d.r);
+                    for (Drop s : d.subs) // its folder's drops once they leave the edge; the goo would join closed bumps together
+                        if (d == expanded || Math.hypot(s.x - d.x, s.y - d.y) > d.r * 1.3f) circle(c, s.x, s.y, s.r, s.color);
+                }
                 tail(c, core, core.r * 0.8f);
                 drawStream(c, true);
                 for (Rider r : riders) { float[] at = streamAt(r.s); circle(c, at[0], at[1], r.r, r.color); }
@@ -222,6 +230,15 @@ final class Liquid extends View {
             d.x = d.tx = core.tx;
             d.y = d.ty = core.ty;
             d.r = d.tr = waiting || widgetMode ? 0 : DROP * dp;
+            for (Apps.App f : a.folder) {
+                Drop sub = new Drop();
+                sub.app = f;
+                sub.parent = d;
+                sub.color = inks[(drops.size() + 2 + d.subs.size()) % inks.length];
+                sub.x = sub.tx = d.x;
+                sub.y = sub.ty = d.y;
+                d.subs.add(sub);
+            }
             drops.add(d);
         }
         frame();
@@ -239,6 +256,7 @@ final class Liquid extends View {
 
     private List<Drop> all() {
         List<Drop> l = new ArrayList<>(drops);
+        for (Drop d : drops) l.addAll(d.subs);
         l.add(core);
         l.add(finger);
         return l;
@@ -313,6 +331,8 @@ final class Liquid extends View {
     }
 
     private static final long FLICK_MS = 250;
+    /** The favourite whose folder is open (its little ring out), or null. */
+    private Drop expanded;
     private long lastTap;
     private float tapX, tapY;
 
@@ -372,16 +392,26 @@ final class Liquid extends View {
         finger.tx = x;
         finger.ty = y;
         Drop best = null;
-        float bestD = 84 * dp;
-        for (Drop d : drops) {
-            float dd = (float) Math.hypot(x - d.tx, y - d.ty);
-            if (dd < bestD) { bestD = dd; best = d; }
+        float bestD = 50 * dp;
+        if (expanded != null) // an open folder's drops come first: they sit beyond their favourite's reach
+            for (Drop s : expanded.subs) {
+                float dd = (float) Math.hypot(x - s.tx, y - s.ty);
+                if (dd < bestD) { bestD = dd; best = s; }
+            }
+        if (best == null) {
+            bestD = 84 * dp;
+            for (Drop d : drops) {
+                float dd = (float) Math.hypot(x - d.tx, y - d.ty);
+                if (dd < bestD) { bestD = dd; best = d; }
+            }
         }
         if (best != hover) {
             hover = best;
             finger.color = hover != null ? hover.color : core.color;
             if (hover != null) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-            for (Drop d : drops) d.tr = (d == hover ? HOVER : DROP) * dp;
+            // a favourite with a folder opens it; it stays open while the finger is on one of its drops
+            if (hover == null || hover.parent == null) expanded = hover != null && !hover.subs.isEmpty() ? hover : null;
+            for (Drop d : drops) d.tr = (d == hover || d == expanded ? HOVER : DROP) * dp;
         }
         frame();
     }
@@ -389,6 +419,7 @@ final class Liquid extends View {
     /** Pulls every drop back into the core, the last one out first. */
     private void merge() {
         open = false;
+        expanded = null;
         flood = null;
         broken = false;
         hover = null;
@@ -559,6 +590,34 @@ final class Liquid extends View {
 
     boolean waiting() { return waiting; }
 
+    private final Path wave = new Path();
+
+    /**
+     * A closed folder on its favourite's drop: the drop's edge swells into one smooth hump per app, apart from each
+     * other, so several read as a wave. Drawn crisp over the goo, which would blur such small curves away.
+     */
+    private void waves(Canvas c, Drop d) {
+        int n = d.subs.size(), steps = 96;
+        float ux = d.x - core.x, uy = d.y - core.y;
+        double out = Math.hypot(ux, uy) < 1 ? -Math.PI / 2 : Math.atan2(uy, ux);
+        float h = d.r * 0.3f; // how far each hump stands out
+        wave.rewind();
+        for (int i = 0; i <= steps; i++) {
+            double t = i * 2 * Math.PI / steps;
+            float rr = d.r;
+            for (int k = 0; k < n; k++) { // a gaussian hump at each app's place: no corner where it meets the edge
+                double g = t - (out + (k - (n - 1) / 2.0) * 0.78);
+                g = Math.atan2(Math.sin(g), Math.cos(g)) / 0.2;
+                rr += h * (float) Math.exp(-g * g);
+            }
+            float x = d.x + (float) Math.cos(t) * rr, y = d.y + (float) Math.sin(t) * rr;
+            if (i == 0) wave.moveTo(x, y); else wave.lineTo(x, y);
+        }
+        wave.close();
+        inkPaint.setColor(d.color);
+        c.drawPath(wave, inkPaint);
+    }
+
     /** 0→1 over the intro for something that inks in after delay ms (1 when no intro is playing). */
     private float inked(long delay) {
         if (waiting) return 0;
@@ -663,6 +722,23 @@ final class Liquid extends View {
             r.s = Math.min(stream, r.s + 0.0016f + 0.009f * r.s * r.s); // slow off the port, sliding faster into the core
             r.s = Math.max(r.s, tail); // a letting-go stream carries its drops up with it
             if (r.s >= 0.985f || stream == 0) { riders.remove(i); core.r += 3 * dp; } // swallowed: the core swells a touch
+        }
+        for (Drop d : drops) {
+            int n = d.subs.size();
+            if (n == 0) continue;
+            float ux = d.x - core.x, uy = d.y - core.y, ul = (float) Math.hypot(ux, uy);
+            double out = ul < 1 ? -Math.PI / 2 : Math.atan2(uy, ux); // away from the core
+            boolean fan = d == expanded;
+            for (int k = 0; k < n; k++) {
+                Drop sd = d.subs.get(k);
+                // closed: round bumps standing out of its edge, spaced so they never touch (a wave, with several)
+                double a = out + (k - (n - 1) / 2.0) * (fan ? 0.8 : 0.78);
+                float reach = fan ? d.r + 70 * dp : d.r * 1.02f;
+                float r = fan ? (sd == hover ? 33 : 26) * dp : d.r * 0.3f;
+                sd.tx = Math.max(r, Math.min(getWidth() - r, d.x + (float) Math.cos(a) * reach));
+                sd.ty = Math.max(r, Math.min(getHeight() - r, d.y + (float) Math.sin(a) * reach));
+                sd.tr = flood == sd ? sd.tr : r;
+            }
         }
         boolean settled = riders.isEmpty() && stream == 0;
         for (Drop d : all()) {
@@ -779,7 +855,11 @@ final class Liquid extends View {
         datePaint.setAlpha((int) (255 * inked(450)));
         c.drawText(DateFormat.format("EEEE d MMMM", System.currentTimeMillis()).toString(), cx(), top + 72 * dp, datePaint);
 
-        for (Drop d : drops) {
+        for (Drop d : drops) if (d != expanded && d.r > 10 * dp && !d.subs.isEmpty()) waves(c, d);
+        List<Drop> shown = new ArrayList<>(drops);
+        if (expanded != null) shown.addAll(expanded.subs);
+        if (flood != null && flood.parent != null && !shown.contains(flood)) shown.add(flood);
+        for (Drop d : shown) {
             if (d.r < 10 * dp) continue; // too small to carry a glyph (hidden in the core, or a splash droplet)
             float sep = (float) Math.hypot(d.x - core.x, d.y - core.y);
             int alpha = (int) (255 * Math.max(0, Math.min(1, (sep - 70 * dp) / (45 * dp)))

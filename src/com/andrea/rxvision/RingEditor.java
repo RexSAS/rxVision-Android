@@ -17,12 +17,15 @@ import java.util.Map;
 
 /**
  * Settings: the ring as it opens on Home, a small ink dot with the favourites around it. Drag a drop onto another
- * drop's place and they swap; the order is saved and Home's ring follows.
+ * drop's place and they swap; the order is saved and Home's ring follows. Each drop's badge ("+", or how many
+ * apps it holds) opens its folder: the apps in the little ring that pops out of it.
  */
 final class RingEditor extends View {
 
     private final Theme theme;
     private final Runnable changed;
+    private final java.util.function.Consumer<Apps.App> folder;
+    private int badge = -1; // the badge pressed: tapping it opens that drop's folder
     private final float dp;
     private final Paint ink = new Paint(Paint.ANTI_ALIAS_FLAG), letter = new Paint(Paint.ANTI_ALIAS_FLAG),
         ring = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -34,10 +37,11 @@ final class RingEditor extends View {
     private int dragged = -1, target = -1;
     private float fx, fy;
 
-    RingEditor(Context ctx, Theme theme, Typeface serif, Runnable changed) {
+    RingEditor(Context ctx, Theme theme, Typeface serif, Runnable changed, java.util.function.Consumer<Apps.App> folder) {
         super(ctx);
         this.theme = theme;
         this.changed = changed;
+        this.folder = folder;
         dp = getResources().getDisplayMetrics().density;
         letter.setTypeface(serif);
         letter.setColor(theme.glyph);
@@ -87,6 +91,12 @@ final class RingEditor extends View {
         fy = e.getY();
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                badge = -1;
+                for (int i = 0; i < favourites.size(); i++) {
+                    float[] b = badgeAt(i);
+                    if (Math.hypot(fx - b[0], fy - b[1]) < 20 * dp) badge = i;
+                }
+                if (badge >= 0) { getParent().requestDisallowInterceptTouchEvent(true); return true; }
                 dragged = nearest(fx, fy);
                 if (dragged < 0) return false;
                 getParent().requestDisallowInterceptTouchEvent(true);
@@ -94,6 +104,7 @@ final class RingEditor extends View {
                 target = dragged;
                 break;
             case MotionEvent.ACTION_MOVE: {
+                if (badge >= 0) return true;
                 int t = nearest(fx, fy);
                 if (t != target && t >= 0) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                 target = t;
@@ -101,6 +112,15 @@ final class RingEditor extends View {
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                if (badge >= 0) {
+                    float[] b = badgeAt(badge);
+                    if (e.getActionMasked() == MotionEvent.ACTION_UP && Math.hypot(fx - b[0], fy - b[1]) < 28 * dp) {
+                        performHapticFeedback(HapticFeedbackConstants.CONFIRM);
+                        folder.accept(favourites.get(badge));
+                    }
+                    badge = -1;
+                    return true;
+                }
                 if (e.getActionMasked() == MotionEvent.ACTION_UP && target >= 0 && target != dragged) {
                     Collections.swap(favourites, dragged, target);
                     // the drops keep their drawn places and glide to their new ones
@@ -137,10 +157,28 @@ final class RingEditor extends View {
         if (moving) postInvalidateOnAnimation();
     }
 
+    /** Where drop i's folder badge sits: on its outer edge, away from the dot. */
+    private float[] badgeAt(int i) {
+        float[] p = slot(i);
+        float ux = p[0] - getWidth() / 2f, uy = p[1] - getHeight() / 2f, l = (float) Math.hypot(ux, uy);
+        float r = (DROP + 2) * dp;
+        return new float[] {p[0] + ux / l * r * 0.72f + uy / l * r * 0.72f, p[1] + uy / l * r * 0.72f - ux / l * r * 0.72f};
+    }
+
     private void drop(Canvas c, int i, float x, float y, float r) {
         Apps.App a = favourites.get(i);
         ink.setColor(theme.inks[(i + 1) % theme.inks.length]);
         c.drawCircle(x, y, r, ink);
+        if (i != dragged) { // its folder badge: "+" when empty, else how many apps it holds
+            float[] b = badgeAt(i), p = slot(i);
+            float bx = x + b[0] - p[0], by = y + b[1] - p[1], br = 11 * dp; // rides the drop as it glides
+            ink.setColor(theme.accent);
+            c.drawCircle(bx, by, br, ink);
+            letter.setColor(0xFF141414);
+            letter.setTextSize(br * 1.5f);
+            c.drawText(a.folder.isEmpty() ? "+" : String.valueOf(a.folder.size()), bx, by + br * 0.5f, letter);
+            letter.setColor(theme.glyph);
+        }
         Drawable g = glyphs.get(a.component);
         if (g == null && a.glyph != null) {
             g = a.glyph.getConstantState().newDrawable().mutate();

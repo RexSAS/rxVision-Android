@@ -73,6 +73,7 @@ public class MainActivity extends Activity implements Liquid.Host, AllApps.Host,
     private final OnBackInvokedCallback closeAll = () -> {
         WindowInsets in = getWindow().getDecorView().getRootWindowInsets();
         if (in != null && in.isVisible(WindowInsets.Type.ime())) allApps.hideKeyboard();
+        else if (allApps.picking()) allApps.donePicking();
         else if (allApps.settingsOpen()) allApps.showSettings(false, false);
         else hideAll(true);
     };

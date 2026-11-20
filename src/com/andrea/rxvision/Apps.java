@@ -30,6 +30,8 @@ final class Apps {
         final String label;
         /** The icon's monochrome layer (Android 13 themed icons), or null: then the first letter is drawn. */
         final Drawable glyph;
+        /** A favourite's folder: the apps in the little ring that pops out of its drop. */
+        final List<App> folder = new ArrayList<>();
 
         App(ComponentName component, String label, Drawable glyph) {
             this.component = component;
@@ -85,7 +87,7 @@ final class Apps {
         if (saved != null) {
             for (String s : saved.split("\n"))
                 for (App a : all) if (a.component.flattenToString().equals(s)) out.add(a);
-            return out;
+            return withFolders(ctx, all, out);
         }
         List<String> pkgs = new ArrayList<>(DEFAULTS);
         ResolveInfo cam = ctx.getPackageManager().resolveActivity(new Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), 0);
@@ -93,7 +95,32 @@ final class Apps {
         for (String p : pkgs)
             for (App a : all)
                 if (a.component.getPackageName().equals(p) && out.size() < MAX_FAVOURITES) { out.add(a); break; }
-        return out;
+        return withFolders(ctx, all, out);
+    }
+
+    // ── folders: apps tucked into a favourite's drop ──
+
+    static final int MAX_FOLDER = 6;
+
+    private static List<App> withFolders(Context ctx, List<App> all, List<App> favourites) {
+        for (App f : favourites) {
+            f.folder.clear();
+            String saved = prefs(ctx).getString("folder:" + f.component.flattenToString(), "");
+            for (String s : saved.split("\n"))
+                for (App a : all) if (a.component.flattenToString().equals(s)) f.folder.add(a);
+        }
+        return favourites;
+    }
+
+    /** Adds the app to the favourite's folder, or takes it out; false when the folder is full. */
+    static boolean toggleFolder(Context ctx, App favourite, App app) {
+        if (isFavourite(favourite.folder, app)) favourite.folder.removeIf(f -> f.component.equals(app.component));
+        else if (favourite.folder.size() >= MAX_FOLDER) return false;
+        else favourite.folder.add(app);
+        StringBuilder sb = new StringBuilder();
+        for (App f : favourite.folder) sb.append(f.component.flattenToString()).append('\n');
+        prefs(ctx).edit().putString("folder:" + favourite.component.flattenToString(), sb.toString()).apply();
+        return true;
     }
 
     static boolean isFavourite(List<App> favourites, App app) {

@@ -5,9 +5,11 @@ A phone launcher, part of [rxenv](https://github.com/RexSAS/rxenv). One drop of 
 - **Home** is a liquid drop holding the time, its edge always moving. Hold anywhere and it splits into a ring
   of your favourite apps around your finger, joined by sticky threads that stretch, sway and snap; slide onto
   one and let go, and its ink floods the screen as the app opens. Tap the drop for the calendar.
+- **Folders**: a favourite can hold up to 6 more apps, shown as small waves on its edge; hover it and they pop
+  out into a little ring of their own. Set them in settings (the "+" badge on each drop of the ring).
 - **Gestures**: flick up for all apps, flick down for the notifications, double-tap empty space for widgets.
 - **All apps**: type and the best match is first, ↵ opens it. Long-press an app to add it to the ring or take
-  it out (up to 8). Settings: the theme (Dark, Light, Colour: multicoloured ink) and the ring's order (drag a
+  it out (up to 8), in place. Settings: the theme (Dark, Light, Colour: multicoloured ink) and the ring's order (drag a
   drop onto another to swap).
 - **Widgets**: the drop falls away, leaving the date and a page of widgets on a 4-column grid. Hold empty
   space for "add a widget" (a picker after Nothing OS's, with live previews); hold a widget to move or remove it.
