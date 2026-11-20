@@ -1,0 +1,364 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question: what should the rxVision Android launcher feel like?
+     Five structurally different home screens, switch with ?variant=A..E, the bottom bar, or ← →. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rxVision launcher prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#111;color:#eee;font:14px/1.45 "Inter Tight",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:56px;padding:32px 24px 96px;flex-wrap:wrap}
+.serif{font-family:"Instrument Serif",serif;font-weight:400}
+aside{max-width:300px}
+aside small{font:500 11px "JetBrains Mono";letter-spacing:.2em;color:#888}
+aside h1{font:400 48px/1 "Instrument Serif";margin:8px 0 14px}
+aside p{color:#aaa}
+aside ul{margin-top:16px;padding-left:18px;color:#aaa}
+aside li{margin:4px 0}
+
+.phone{position:relative;width:340px;height:756px;border-radius:46px;overflow:hidden;box-shadow:0 0 0 9px #1f1f1f,0 0 0 10px #333,0 40px 90px #000a;user-select:none;-webkit-user-select:none;touch-action:none;color:var(--fg,#eee)}
+.status{position:absolute;top:15px;left:30px;right:28px;display:flex;justify-content:space-between;font:500 12px "JetBrains Mono";z-index:30;pointer-events:none}
+.grain::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.22;mix-blend-mode:multiply;z-index:1;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.depth.grain::after{mix-blend-mode:overlay;opacity:.3}
+.hint{position:absolute;bottom:22px;width:100%;text-align:center;font:400 10px "JetBrains Mono";letter-spacing:.18em;text-transform:uppercase;opacity:.45;pointer-events:none}
+.ico svg{width:100%;height:100%}
+.letter{font:400 1.25em/1 "Instrument Serif"}
+
+/* launch transition (shared) */
+.launch{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;pointer-events:none;
+  transition:clip-path .55s cubic-bezier(.3,.8,.15,1),opacity .4s}
+.launch .ico{width:52px;height:52px;display:grid;place-items:center;font-size:40px}
+.launch b{font:400 44px "Instrument Serif"}
+
+/* switcher (not part of the design) */
+.switch{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:6px;border-radius:999px;background:#fff;color:#000;box-shadow:0 10px 30px #0008;font:500 13px "Inter Tight";z-index:99}
+.switch button{border:0;background:#0000;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer}
+.switch button:hover{background:#0001}
+.switch span{min-width:170px;text-align:center}
+
+/* A · Liquid */
+.liquid{--fg:#141414;background:#e8e3d9}
+.liquid .goo{position:absolute;inset:0;filter:url(#goo);z-index:2}
+.liquid .drop{position:absolute;left:0;top:0;border-radius:50%;background:#141414}
+.liquid .glyphs{position:absolute;inset:0;z-index:3;pointer-events:none;color:#e8e3d9}
+.liquid .glyph{position:absolute;left:0;top:0;width:26px;height:26px;display:grid;place-items:center;font-size:22px}
+.liquid .glyph .ico{width:26px;height:26px;display:grid;place-items:center}
+.liquid .lq-clock{position:absolute;left:0;top:0;z-index:3;color:#e8e3d9;font:400 46px/1 "Instrument Serif";transition:opacity .25s;pointer-events:none}
+.liquid .lq-date{position:absolute;top:84px;width:100%;text-align:center;font:400 italic 22px "Instrument Serif";z-index:3}
+
+/* B · Dial */
+.dial{--fg:#ece9e4;background:#0b0b0c}
+.dl-glow{position:absolute;width:420px;height:420px;left:190px;top:260px;border-radius:50%;filter:blur(70px);opacity:.38;transition:background-color .6s}
+.dl-ticks{position:absolute;inset:0}
+.dl-ic{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;display:grid;place-items:center;background:#1c1c1e;color:#ece9e4;cursor:pointer;font-size:22px}
+.dl-ic .ico{width:21px;height:21px;display:grid;place-items:center}
+.dl-ic.sel{background:#ece9e4;color:#0b0b0c}
+.dl-notch{position:absolute;left:132px;top:469px;width:18px;height:2px;border-radius:1px;transition:background-color .4s}
+.dl-top{position:absolute;top:58px;left:28px;font:400 11px "JetBrains Mono";letter-spacing:.15em;opacity:.6;text-transform:uppercase}
+.dl-name{position:absolute;left:28px;top:118px;right:28px;cursor:pointer}
+.dl-name small{font:400 11px "JetBrains Mono";letter-spacing:.15em;opacity:.5}
+.dl-name b{display:block;font-family:"Instrument Serif";font-weight:400;line-height:1;margin-top:8px;animation:rise .45s cubic-bezier(.2,.9,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px);filter:blur(4px)}}
+
+/* C · Lens */
+.lens{--fg:#e8e4dc;background:#09090a}
+.lens canvas{position:absolute;inset:0}
+.ln-clock{position:absolute;left:0;top:0;font:400 40px/1 "Instrument Serif";pointer-events:none}
+.ln-name{position:absolute;left:0;top:0;font:400 30px/1 "Instrument Serif";white-space:nowrap;pointer-events:none}
+.ln-top{position:absolute;top:58px;width:100%;text-align:center;font:400 italic 20px "Instrument Serif";opacity:.7}
+
+/* D · Depth */
+.depth{--fg:#f4f1ec;background:#0a0a0b}
+.dp-bg{position:absolute;inset:0}
+.dp-stage{position:absolute;inset:0;perspective:640px;perspective-origin:60% 20%}
+.dp-item{position:absolute;left:30px;top:520px;white-space:nowrap;font:400 58px/1 "Instrument Serif";cursor:pointer;transform-origin:left center;will-change:transform,opacity,filter}
+.dp-item small{display:block;font:400 10px "JetBrains Mono";letter-spacing:.2em;opacity:.55;margin-bottom:6px}
+.dp-top{position:absolute;top:60px;left:30px;right:30px;display:flex;justify-content:space-between;font:400 11px "JetBrains Mono";letter-spacing:.15em;text-transform:uppercase;opacity:.65;z-index:2}
+.dp-rail{position:absolute;right:16px;top:160px;bottom:120px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;z-index:2;pointer-events:none}
+.dp-rail i{display:block;width:6px;height:1px;background:currentColor;opacity:.3;transition:width .3s,opacity .3s}
+.dp-rail i.on{width:18px;opacity:1}
+
+/* E · Prompt */
+.prompt{--fg:#141414;background:#efebe4;cursor:text}
+.pr-date{position:absolute;top:62px;left:30px;font:400 11px "JetBrains Mono";letter-spacing:.15em;text-transform:uppercase;opacity:.55}
+.pr-time{position:absolute;top:86px;left:24px;font:400 136px/1 "Instrument Serif";letter-spacing:-3px}
+.pr-greet{position:absolute;top:226px;left:30px;font:400 italic 26px "Instrument Serif";opacity:.6}
+.pr-line{position:absolute;left:30px;right:30px;top:400px;font:400 46px/1.1 "Instrument Serif";white-space:nowrap;overflow:hidden}
+.pr-line .ghost{opacity:.28}
+.pr-line .ph{opacity:.28;font-style:italic}
+.pr-line i{display:inline-block;width:2px;height:40px;background:#ff4d00;vertical-align:-6px;margin:0 1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.pr-list{position:absolute;left:30px;right:30px;top:470px;list-style:none}
+.pr-list li{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid #1414141a;font:500 15px "Inter Tight";cursor:pointer;transition:padding .25s}
+.pr-list li .ico{width:18px;height:18px;display:grid;place-items:center;font-size:17px;opacity:.75}
+.pr-list li.sel{padding-left:10px;box-shadow:inset 2px 0 #ff4d00}
+.pr-list li kbd{margin-left:auto;font:400 10px "JetBrains Mono";opacity:.45}
+.pr-list .cap{border:0;font:400 10px "JetBrains Mono";letter-spacing:.15em;text-transform:uppercase;opacity:.5;cursor:default;padding-bottom:4px}
+.pr-in{position:absolute;opacity:0;pointer-events:none;top:400px;left:30px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><filter id="goo"><feGaussianBlur in="SourceGraphic" stdDeviation="9"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 24 -11"/></filter></svg>
+<div class="phone" id="phone"></div>
+<aside id="about"></aside>
+<div class="switch"><button id="prev" aria-label="Previous variant">←</button><span id="label"></span><button id="next" aria-label="Next variant">→</button></div>
+
+<script>
+const I={
+  phone:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  camera:'<rect x="3" y="7" width="18" height="13" rx="3"/><circle cx="12" cy="13.5" r="3.5"/><path d="M9 7l1.5-3h3L15 7"/>',
+  chrome:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5h8.2M9 13.8 4.9 6.7M15 13.8l-4.1 7.1"/>',
+  spotify:'<circle cx="12" cy="12" r="9"/><path d="M7 9.5c3.5-1 7-.6 10 1M7.5 12.5c3-.8 6-.4 8.5 1M8 15.5c2.4-.6 4.6-.3 6.5.8"/>',
+  youtube:'<rect x="2.5" y="6" width="19" height="12" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',
+  claude:'<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/>',
+  whatsapp:'<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/>',
+  rxhome:'<path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/>',
+  maps:'<path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  power:'<path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+  telegram:'<path d="M21 4 3 11l6 2 2 6 3-4 5 4z"/>',
+  wallet:'<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/>',
+  github:'<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
+  weather:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  amazon:'<path d="M5 13c4 3 10 3 14 0M16 11l3 2-1 3"/>',
+  insta:'<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/>',
+  rxconnect:'<rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10l5-3v10l-5-3"/>',
+  jellyfin:'<path d="M12 4 3 19h18z"/><path d="M12 11l-3 5h6z"/>',
+};
+// ordered by (guessed) usage; accent = brand colour, used for the launch fill and colour moods
+const APPS=[['Claude','claude','#d97757'],['WhatsApp','whatsapp','#25d366'],['Spotify','spotify','#1db954'],['rxhome','rxhome','#ff5a1f'],['YouTube','youtube','#ff0033'],['Telegram','telegram','#2aabee'],['Camera','camera','#8e9196'],['Chrome','chrome','#4285f4'],['Phone','phone','#34c759'],['Instagram','insta','#e1306c'],['Jellyfin','jellyfin','#aa5cc3'],['Maps','maps','#34a853'],['rxConnect','rxconnect','#7c5cff'],['SwitchBot','power','#e60012'],['GitHub','github','#8b949e'],['Wallet','wallet','#5f6368'],['WetterOnline','weather','#2d9cdb'],['Amazon','amazon','#ff9900'],['ChatGPT',0,'#10a37f'],['Perplexity',0,'#20808d'],['Revolut',0,'#0075eb'],['Trainline',0,'#00a88f'],['Skyscanner',0,'#0770e3'],['Airbnb',0,'#ff385c'],['Tricount',0,'#3fb68b'],['TikTok',0,'#fe2c55'],['Tapo',0,'#4acbd6'],['WireGuard',0,'#88171a'],['Slopes',0,'#3b82f6'],['Subito',0,'#e5333b'],['Pronto Treno',0,'#cc0000'],['Alexa',0,'#00caff'],['Docs',0,'#4285f4'],['Classroom',0,'#0f9d58'],['Authenticator',0,'#4285f4'],['MyCupra',0,'#95572b'],['Google Home',0,'#4285f4'],['Play Console',0,'#01875f'],['IO',0,'#0066cc'],['Karvo',0,'#777777']].map(([n,i,c])=>({n,i,c}));
+const app=n=>APPS.find(a=>a.n===n);
+const ico=a=>`<span class="ico">${a.i?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${I[a.i]}</svg>`:`<span class="letter">${a.n[0]}</span>`}</span>`;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pad=n=>String(n).padStart(2,'0');
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const light=h=>{const [r,g,b]=rgb(h);return r*.3+g*.59+b*.11>160};
+const P=document.getElementById('phone');
+const rel=e=>{const r=P.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}};
+const spring=(d,k,damp)=>{d.vx=(d.vx+(d.tx-d.x)*k)*damp;d.vy=(d.vy+(d.ty-d.y)*k)*damp;d.x+=d.vx;d.y+=d.vy};
+
+let busy=false;
+function launch(x,y,a,bg=a.c){
+  if(busy)return; busy=true;
+  const o=document.createElement('div');o.className='launch';
+  o.style.background=bg;o.style.color=light(bg)?'#141414':'#f4f1ec';
+  o.innerHTML=ico(a)+`<b>${a.n}</b>`;
+  o.style.clipPath=`circle(20px at ${x}px ${y}px)`;
+  P.append(o);o.getBoundingClientRect();
+  o.style.clipPath=`circle(160% at ${x}px ${y}px)`;
+  setTimeout(()=>o.style.opacity=0,1000);
+  setTimeout(()=>{o.remove();busy=false},1400);
+}
+
+/* ───────────── A · Liquid ───────────── */
+function liquid(s){
+  s.innerHTML=`<div class="lq-date" data-date></div><div class="goo"></div><div class="glyphs"></div><div class="lq-clock" data-clock></div><div class="hint">hold anywhere · slide · let go</div>`;
+  const goo=s.querySelector('.goo'),gl=s.querySelector('.glyphs'),clk=s.querySelector('.lq-clock');
+  const C={x:170,y:410};
+  const mk=r=>{const el=document.createElement('div');el.className='drop';goo.append(el);return {el,x:C.x,y:C.y,vx:0,vy:0,tx:C.x,ty:C.y,r,tr:r,at:0}};
+  const core=mk(82),finger=mk(0);
+  const drops=['Claude','WhatsApp','Spotify','rxhome','YouTube','Camera','Telegram','Chrome'].map(n=>{
+    const d=mk(30);d.a=app(n);d.g=document.createElement('div');d.g.className='glyph';d.g.innerHTML=ico(d.a);gl.append(d.g);return d});
+  let open=false,hover=null;
+  const home=()=>{const t=performance.now();drops.forEach((d,i)=>{d.tx=C.x;d.ty=C.y;d.tr=30;d.at=t+(drops.length-i)*22});core.tx=C.x;core.ty=C.y;finger.tx=C.x;finger.ty=C.y;finger.tr=0};
+  P.onpointerdown=e=>{
+    const f=rel(e),ax=clamp(f.x,158,182),ay=clamp(f.y,190,580),t=performance.now();
+    open=true;P.setPointerCapture(e.pointerId);
+    core.tx=ax;core.ty=ay;
+    finger.x=finger.tx=f.x;finger.y=finger.ty=f.y;finger.tr=15;
+    drops.forEach((d,i)=>{const g=-Math.PI/2+i*2*Math.PI/drops.length;d.tx=ax+Math.cos(g)*98;d.ty=ay+Math.sin(g)*98;d.at=t+i*30});
+  };
+  P.onpointermove=e=>{
+    if(!open)return;const f=rel(e);finger.tx=f.x;finger.ty=f.y;
+    hover=null;let best=46;
+    drops.forEach(d=>{const dd=Math.hypot(f.x-d.tx,f.y-d.ty);if(dd<best){best=dd;hover=d}});
+    drops.forEach(d=>d.tr=d===hover?44:30);
+  };
+  P.onpointerup=P.onpointercancel=()=>{if(!open)return;open=false;if(hover)launch(hover.x,hover.y,hover.a,'#141414');hover=null;home()};
+  return t=>{
+    core.tr=open?50:82+Math.sin(t/700)*3;
+    for(const d of [core,finger,...drops]){
+      if(performance.now()>=d.at)spring(d,.075,.8);
+      d.r+=(d.tr-d.r)*.16;
+      d.el.style.cssText=`width:${2*d.r}px;height:${2*d.r}px;transform:translate(${d.x-d.r}px,${d.y-d.r}px)`;
+    }
+    drops.forEach(d=>{const sep=Math.hypot(d.x-core.x,d.y-core.y);d.g.style.opacity=clamp((sep-60)/40,0,1);d.g.style.transform=`translate(${d.x-13}px,${d.y-13}px) scale(${d.r/30})`});
+    clk.style.transform=`translate(${core.x}px,${core.y}px) translate(-50%,-50%)`;clk.style.opacity=open?0:1;
+  };
+}
+
+/* ───────────── B · Dial ───────────── */
+function dial(s){
+  const W={x:398,y:470},R=208,STEP=13,N=APPS.length,MAX=(N-1)*STEP;
+  let ticks='';for(let k=0;k<120;k++){const g=k*3*Math.PI/180,r1=R+34,r2=R+(k%5?40:48);ticks+=`<line x1="${W.x+Math.cos(g)*r1}" y1="${W.y+Math.sin(g)*r1}" x2="${W.x+Math.cos(g)*r2}" y2="${W.y+Math.sin(g)*r2}" stroke="currentColor" stroke-opacity="${k%5?.25:.6}"/>`}
+  s.innerHTML=`<div class="dl-glow"></div><svg class="dl-ticks" width="340" height="756"><circle cx="${W.x}" cy="${W.y}" r="${R}" fill="none" stroke="currentColor" stroke-opacity=".08"/><g>${ticks}</g></svg>
+    <div class="dl-icons"></div><div class="dl-notch"></div><div class="dl-top"><span data-clock></span> · <span data-short></span></div><div class="dl-name"></div><div class="hint">drag to turn · tap to open</div>`;
+  const g=s.querySelector('g'),glow=s.querySelector('.dl-glow'),notch=s.querySelector('.dl-notch'),name=s.querySelector('.dl-name'),box=s.querySelector('.dl-icons');
+  const ics=APPS.map((a,i)=>{const el=document.createElement('div');el.className='dl-ic';el.innerHTML=ico(a);el.dataset.i=i;box.append(el);return el});
+  let rot=3*STEP,v=0,drag=null,target=null,sel=-1;
+  P.onpointerdown=e=>{drag={y:e.clientY,y0:e.clientY};v=0;target=null;P.setPointerCapture(e.pointerId)};
+  P.onpointermove=e=>{if(!drag)return;let d=-(e.clientY-drag.y)*.28;if(rot<0||rot>MAX)d*=.35;rot+=d;v=clamp(d,-18,18);drag.y=e.clientY};
+  P.onpointerup=e=>{
+    if(!drag)return;const moved=Math.abs(e.clientY-drag.y0);drag=null;
+    if(moved<6){v=0;const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest('.dl-ic,.dl-name');if(!hit)return;
+      const i=hit.classList.contains('dl-name')?sel:+hit.dataset.i;
+      if(i===sel){const r=ics[i].getBoundingClientRect(),q=P.getBoundingClientRect();launch(r.left-q.left+r.width/2,r.top-q.top+r.height/2,APPS[i])}else target=i*STEP}
+  };
+  return ()=>{
+    if(!drag){
+      if(target===null&&Math.abs(v)>.35){rot+=v;v*=rot<0||rot>MAX?.5:.93}
+      else{const tg=target??clamp(Math.round(rot/STEP)*STEP,0,MAX);rot+=(tg-rot)*.16;if(Math.abs(tg-rot)<.05){rot=tg;target=null}}
+    }
+    g.setAttribute('transform',`rotate(${rot} ${W.x} ${W.y})`);
+    const now=clamp(Math.round(rot/STEP),0,N-1);
+    APPS.forEach((a,i)=>{
+      const dlt=i*STEP-rot,el=ics[i];
+      if(Math.abs(dlt)>95){el.style.display='none';return}
+      const th=(180-dlt)*Math.PI/180,sc=clamp(1.3-Math.abs(dlt)/80,.5,1.3);
+      el.style.display='';el.style.opacity=clamp(1-Math.abs(dlt)/95,0,1);
+      el.style.transform=`translate(${W.x+Math.cos(th)*R}px,${W.y+Math.sin(th)*R}px) scale(${sc})`;
+      el.classList.toggle('sel',i===now);
+    });
+    if(now!==sel){sel=now;const a=APPS[sel];
+      name.innerHTML=`<small>${pad(sel+1)} / ${N}</small><b style="font-size:${a.n.length>9?46:64}px">${a.n}</b>`;
+      glow.style.backgroundColor=a.c;notch.style.backgroundColor=a.c}
+  };
+}
+
+/* ───────────── C · Lens ───────────── */
+function lens(s){
+  s.innerHTML=`<canvas width="680" height="1512"></canvas><div class="ln-top" data-date></div><div class="ln-clock" data-clock></div><div class="ln-name"></div><div class="hint">hold · the lens floats above your thumb</div>`;
+  const cv=s.querySelector('canvas'),x=cv.getContext('2d'),clk=s.querySelector('.ln-clock'),nm=s.querySelector('.ln-name');
+  cv.style.width='340px';cv.style.height='756px';x.scale(2,2);
+  const O={x:170,y:420},R=78;
+  const dots=[];for(let n=0;n<520;n++){const r=20*Math.sqrt(n+.5),th=n*2.39996;dots.push({x:O.x+Math.cos(th)*r,y:O.y+Math.sin(th)*r,a:APPS[n]})}
+  const L={x:O.x,y:O.y,vx:0,vy:0,tx:O.x,ty:O.y};let act=0,down=false,focus=null;
+  P.onpointerdown=e=>{const f=rel(e);down=true;L.tx=f.x;L.ty=f.y-80;P.setPointerCapture(e.pointerId)};
+  P.onpointermove=e=>{if(!down)return;const f=rel(e);L.tx=f.x;L.ty=f.y-80};
+  P.onpointerup=P.onpointercancel=()=>{if(!down)return;down=false;if(focus&&act>.5)launch(L.x,L.y,focus.a);L.tx=O.x;L.ty=O.y};
+  return ()=>{
+    spring(L,.13,.72);act+=((down?1:0)-act)*.12;
+    focus=null;let best=19;for(const d of dots)if(d.a){const dd=Math.hypot(d.x-L.x,d.y-L.y);if(dd<best){best=dd;focus=d}}
+    x.clearRect(0,0,340,756);
+    for(const d of dots){
+      const dx=d.x-L.x,dy=d.y-L.y,t=Math.hypot(dx,dy)/R,inside=t<1,k=inside?1+1.5*act*(1-t)**2:1;
+      const px=L.x+dx*k,py=L.y+dy*k;if(px<-10||px>350||py<-10||py>766)continue;
+      let r=(d.a?2.6:1.1)*(1+(k-1)*1.6),col='232,228,220',al=d.a?.9:.2;
+      if(inside){al*=.12+.88*act;if(d.a&&act>.2)col=rgb(d.a.c).join(',')}
+      if(d===focus&&act>.2)r=8+9*act;
+      x.beginPath();x.arc(px,py,r,0,7);x.fillStyle=`rgba(${col},${al})`;x.fill();
+    }
+    x.beginPath();x.arc(L.x,L.y,R,0,7);x.strokeStyle=`rgba(255,255,255,${.25+.35*act})`;x.lineWidth=1;x.stroke();
+    clk.style.opacity=1-act;clk.style.transform=`translate(${L.x}px,${L.y}px) translate(-50%,-50%)`;
+    nm.textContent=focus?focus.a.n:'';nm.style.opacity=focus?act:0;nm.style.transform=`translate(${L.x}px,${L.y-R-14}px) translate(-50%,-100%)`;
+  };
+}
+
+/* ───────────── D · Depth ───────────── */
+function depth(s){
+  s.innerHTML=`<div class="dp-bg"></div><div class="dp-top"><span data-clock></span><span data-short></span></div><div class="dp-stage"></div><div class="dp-rail">${APPS.map(()=>'<i></i>').join('')}</div><div class="hint">drag or scroll · tap to open</div>`;
+  const bg=s.querySelector('.dp-bg'),st=s.querySelector('.dp-stage'),rail=[...s.querySelectorAll('.dp-rail i')];
+  const els=APPS.map((a,i)=>{const el=document.createElement('div');el.className='dp-item';el.innerHTML=`<small>${pad(i+1)}</small>${a.n}`;el.dataset.i=i;st.append(el);return el});
+  let pos=0,v=0,drag=null,target=null,col=rgb(APPS[0].c),cur=-1,wheelT;
+  const MAX=APPS.length-1;
+  P.onpointerdown=e=>{drag={y:e.clientY,y0:e.clientY};v=0;target=null;P.setPointerCapture(e.pointerId)};
+  P.onpointermove=e=>{if(!drag||drag.wheel)return;let d=-(e.clientY-drag.y)/85;if(pos<0||pos>MAX)d*=.35;pos+=d;v=clamp(d,-.4,.4);drag.y=e.clientY};
+  P.onpointerup=e=>{if(!drag||drag.wheel)return;const moved=Math.abs(e.clientY-drag.y0);drag=null;
+    if(moved<6){v=0;const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest('.dp-item');if(!hit)return;const i=+hit.dataset.i;
+      if(i===cur){const r=hit.getBoundingClientRect(),q=P.getBoundingClientRect();launch(r.left-q.left+40,r.top-q.top+40,APPS[i])}else target=i}};
+  P.onwheel=e=>{e.preventDefault();pos=clamp(pos+e.deltaY/260,-.3,MAX+.3);v=0;target=null;drag={wheel:1};clearTimeout(wheelT);wheelT=setTimeout(()=>drag=null,120)};
+  return ()=>{
+    if(!drag){
+      if(target===null&&Math.abs(v)>.012){pos+=v;v*=pos<0||pos>MAX?.5:.93}
+      else{const tg=target??clamp(Math.round(pos),0,MAX);pos+=(tg-pos)*.14;if(Math.abs(tg-pos)<.002){pos=tg;target=null}}
+    }
+    els.forEach((el,i)=>{
+      const r=i-pos;
+      if(r<-1.3||r>9){el.style.display='none';return}
+      el.style.display='';
+      el.style.transform=`translate3d(0,${-r*64}px,${-r*230}px)`;
+      el.style.opacity=r<0?clamp(1+r*1.5,0,1):clamp(1-r*.11,0,1);
+      el.style.filter=`blur(${r>0?r*1.1:-r*5}px)`;
+      el.style.zIndex=100-Math.round(r*10);
+    });
+    const now=clamp(Math.round(pos),0,MAX);
+    if(now!==cur){cur=now;rail.forEach((t,i)=>t.classList.toggle('on',i===cur))}
+    col=col.map((c,j)=>c+(rgb(APPS[cur].c)[j]-c)*.06);
+    bg.style.background=`radial-gradient(120% 60% at 20% 80%,rgba(${col.join(',')},.55),transparent 65%),radial-gradient(80% 40% at 90% 10%,rgba(${col.join(',')},.18),transparent 70%)`;
+  };
+}
+
+/* ───────────── E · Prompt ───────────── */
+function prompt(s){
+  s.innerHTML=`<div class="pr-date" data-date></div><div class="pr-time serif" data-clock></div><div class="pr-greet"></div>
+    <div class="pr-line"></div><ul class="pr-list"></ul><input class="pr-in" autocomplete="off" spellcheck="false"><div class="hint">just start typing · ↵ open · tab next</div>`;
+  const line=s.querySelector('.pr-line'),list=s.querySelector('.pr-list'),inp=s.querySelector('.pr-in');
+  const h=new Date().getHours();
+  const [greet,usual]=h<5?['Late night.',['Spotify','YouTube','WhatsApp']]:h<11?['Morning.',['WetterOnline','Trainline','Spotify']]:h<18?['Afternoon.',['Claude','Chrome','GitHub']]:['Evening.',['Jellyfin','rxhome','WhatsApp']];
+  s.querySelector('.pr-greet').textContent=greet;
+  let sel=0,res=[];
+  const score=(n,q)=>{n=n.toLowerCase();if(n.startsWith(q))return 0;if(n.split(' ').some(w=>w.startsWith(q)))return 1;if(n.includes(q))return 2;let j=0;for(const c of n)if(c===q[j])j++;return j===q.length?3:9};
+  const render=()=>{
+    const q=inp.value.toLowerCase(),focused=document.activeElement===inp;
+    res=q?APPS.map((a,i)=>({a,s:score(a.n,q)+i/1000})).filter(r=>r.s<9).sort((x,y)=>x.s-y.s).slice(0,5).map(r=>r.a):usual.map(app);
+    sel=clamp(sel,0,Math.max(0,res.length-1));
+    const top=res[sel],ghost=q&&top&&top.n.toLowerCase().startsWith(q)?top.n.slice(q.length):'';
+    line.innerHTML=q?`<span>${inp.value.replace(/</g,'&lt;')}</span><i></i><span class="ghost">${ghost}</span>`:focused?`<i></i><span class="ph">open…</span>`:`<span class="ph">open…</span>`;
+    list.innerHTML=(q?'':'<li class="cap">usually now</li>')+res.map((a,i)=>`<li data-i="${i}" class="${q&&i===sel?'sel':''}">${ico(a)}${a.n}${q&&i===sel?'<kbd>↵</kbd>':''}</li>`).join('')+(q&&!res.length?'<li class="cap">nothing. ↵ searches the web</li>':'');
+  };
+  const go=a=>{const r=line.getBoundingClientRect(),q=P.getBoundingClientRect();launch(r.left-q.left+40,r.top-q.top+24,a);inp.value='';sel=0;render()};
+  inp.oninput=()=>{sel=0;render()};
+  inp.onkeydown=e=>{
+    if(e.key==='Enter'&&res[sel])go(res[sel]);
+    else if(e.key==='Tab'||e.key==='ArrowDown'){e.preventDefault();sel=(sel+1)%Math.max(1,res.length);render()}
+    else if(e.key==='ArrowUp'){e.preventDefault();sel=(sel-1+res.length)%Math.max(1,res.length);render()}
+    else if(e.key==='Escape'){inp.value='';inp.blur();render()}
+  };
+  inp.onblur=render;
+  P.onpointerdown=e=>{e.preventDefault();inp.focus();render()};
+  P.onpointerup=e=>{const li=e.target.closest('li[data-i]');if(li)go(res[+li.dataset.i])};
+  render();setTimeout(()=>{inp.focus();render()},50);
+  return ()=>{};
+}
+
+/* ───────────── switcher ───────────── */
+const V={
+  A:['Liquid',liquid,'liquid grain','Ink on paper. The home is one breathing drop holding the time. Hold anywhere and it splits into your favourite apps around your thumb, joined by liquid threads. Slide onto one and let go.',['One gesture: hold, slide, release','Only favourites live here; everything else is search','Calm when idle, alive when touched']],
+  B:['Dial',dial,'dial','A watch bezel for your thumb. Every app sits on a big wheel hanging off the right edge. Spin it with inertia and it snaps to an app; the name lands large on the left while the glow takes the app\'s colour.',['One-handed: the wheel is where the right thumb rests','All apps, nothing hidden, no grid','Mechanical feel: ticks, inertia, snap']],
+  C:['Lens',lens,'lens','Your apps as a field of stars in a sunflower spiral, the ones you use most at the centre. Hold to pick up a lens that magnifies and colours whatever is under it; let go to open.',['No icons at all until you look','Most used apps cluster in the middle','The lens floats above your thumb so nothing hides it']],
+  D:['Depth',depth,'depth grain','Apps as a corridor of names going into the screen. Drag to fly through it; the front name is sharp and the rest fade into blur. The whole screen slowly takes the colour of the app in front.',['Typography is the interface','Colour comes from the app you are about to open','Long list, but only one thing in focus']],
+  E:['Prompt',prompt,'prompt grain','A home that is mostly a cursor. A huge clock, a line of text, and whatever you type completes inline to an app. When empty, it suggests what you usually open at this hour.',['Fastest when you know what you want','Light and paper-like, no icons in the way','On the phone the keyboard opens with the launcher']],
+};
+const KEYS=Object.keys(V);
+let tick=null;
+function show(k){
+  const [name,fn,cls,desc,pts]=V[k];
+  history.replaceState(null,'','?variant='+k);
+  P.className='phone '+cls;P.onpointerdown=P.onpointermove=P.onpointerup=P.onpointercancel=P.onwheel=null;busy=false;
+  P.innerHTML='<div class="status"><span data-clock></span><span>5G ▮▮▮ 82%</span></div><div class="screen"></div>';
+  tick=fn(P.querySelector('.screen'));
+  document.getElementById('label').textContent=`${k} · ${name}`;
+  document.getElementById('about').innerHTML=`<small>VARIANT ${k} OF ${KEYS.length}</small><h1>${name}</h1><p>${desc}</p><ul>${pts.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+  clock();
+}
+let cur=new URLSearchParams(location.search).get('variant');if(!V[cur])cur='A';
+const step=d=>{cur=KEYS[(KEYS.indexOf(cur)+d+KEYS.length)%KEYS.length];show(cur)};
+document.getElementById('prev').onclick=()=>step(-1);
+document.getElementById('next').onclick=()=>step(1);
+addEventListener('keydown',e=>{if(e.target.matches('input,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')step(-1);if(e.key==='ArrowRight')step(1)});
+
+function clock(){
+  const d=new Date();
+  document.querySelectorAll('[data-clock]').forEach(e=>e.textContent=`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  document.querySelectorAll('[data-date]').forEach(e=>e.textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}));
+  document.querySelectorAll('[data-short]').forEach(e=>e.textContent=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}));
+}
+setInterval(clock,10000);
+(function loop(t){tick&&tick(t);requestAnimationFrame(loop)})(0);
+show(cur);
+</script>
+</body>
+</html>
