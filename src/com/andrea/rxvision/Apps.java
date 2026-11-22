@@ -57,7 +57,7 @@ final class Apps {
             Drawable glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getMonochrome() : null;
             if (glyph == null) glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getForeground()
                 : new InsetDrawable(icon, 1 / 3f); // a legacy icon goes in the middle third, where a monochrome layer keeps its glyph
-            out.add(new App(info.getComponentName(), info.getLabel().toString(), untintable(glyph) ? luminance(ctx, icon) : glyph.mutate()));
+            out.add(new App(info.getComponentName(), info.getLabel().toString(), untintable(glyph) ? luminance(ctx, icon) : fitted(ctx, glyph.mutate())));
         }
         Collator c = Collator.getInstance();
         out.sort((a, b) -> c.compare(a.label, b.label));
@@ -81,25 +81,84 @@ final class Apps {
         return opaque > px.length * 93 / 100 || opaque < px.length * 2 / 100;
     }
 
-    /** The original icon as a glyph: its colours inverted, what is then near white kept, so the theme's tint shades it like the others.
-     *  Inset so it sits a little larger than a monochrome glyph in its 108-unit canvas. */
+    /** The original icon as a glyph, so the theme's tint shades it like the others: either its dark parts (a dark logo on a
+     *  light icon) or its light parts (a light logo on a dark icon, like rxhome's), whichever covers less, since that's the logo.
+     *  Cropped to the logo and scaled to fill what a drop or list row shows uncut. */
     static Drawable luminance(Context ctx, Drawable icon) {
         int n = 192;
         Bitmap b = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
-        icon.setBounds(n / 4, n / 4, n * 3 / 4, n * 3 / 4);
+        icon.setBounds(0, 0, n, n);
         icon.draw(new Canvas(b));
-        int[] px = new int[n * n];
+        int[] px = new int[n * n], dark = new int[px.length], light = new int[px.length];
         b.getPixels(px, 0, n, 0, 0, n, n);
+        long darkSum = 0, lightSum = 0;
         for (int i = 0; i < px.length; i++) {
             int p = px[i], a = p >>> 24;
-            // getPixels gives unpremultiplied colour, so weight brightness by the pixel's own alpha
-            int lum = (2126 * ((p >> 16) & 0xFF) + 7152 * ((p >> 8) & 0xFF) + 722 * (p & 0xFF)) / 10000;
-            // inverted, only what is near white stays (a short ramp keeps the edges smooth); the rest goes clear
-            int keep = Math.max(0, Math.min(255, (255 - lum - 35) * 255 / 80));
-            px[i] = (keep * a / 255) << 24 | 0xFFFFFF;
+            int lum = lum(p);
+            // getPixels gives unpremultiplied colour, so weight by the pixel's own alpha; a short ramp keeps the edges smooth
+            darkSum += dark[i] = keep(255 - lum) * a / 255;
+            lightSum += light[i] = keep(lum) * a / 255;
         }
+        int[] glyph = darkSum <= lightSum && darkSum > 0 || lightSum == 0 ? dark : light;
+        if (glyph == light) { // a light logo: only what is near its brightest colour, so greys around it go too
+            int top = 1;
+            for (int p : px) if (p >>> 24 > 127) top = Math.max(top, lum(p));
+            for (int i = 0; i < px.length; i++)
+                light[i] = Math.max(0, Math.min(255, (lum(px[i]) - top * 70 / 100) * 255 / Math.max(1, top * 15 / 100)))
+                    * (px[i] >>> 24) / 255;
+        }
+        int max = 1;
+        for (int k : glyph) max = Math.max(max, k);
+        for (int i = 0; i < px.length; i++) px[i] = glyph[i] * 255 / max << 24 | 0xFFFFFF; // its strongest part fully opaque
         b.setPixels(px, 0, n, 0, 0, n, n);
-        return new BitmapDrawable(ctx.getResources(), b);
+        Rect r = ink(b);
+        return new BitmapDrawable(ctx.getResources(), r == null ? b : fit(b, r));
+    }
+
+    /** The share of the glyph canvas a drop or list row shows uncut, around its centre. */
+    private static final float SHOWN = 0.44f;
+
+    /** The glyph as it is, or, when its art reaches past what's shown, shrunk to fit inside it. */
+    static Drawable fitted(Context ctx, Drawable glyph) {
+        int n = 192;
+        Bitmap b = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
+        Drawable d = glyph.getConstantState() == null ? glyph : glyph.getConstantState().newDrawable();
+        d.setBounds(0, 0, n, n);
+        d.draw(new Canvas(b));
+        Rect r = ink(b);
+        float lo = n * (1 - SHOWN) / 2, hi = n - lo;
+        if (r == null || r.left >= lo && r.top >= lo && r.right <= hi && r.bottom <= hi) { b.recycle(); return glyph; }
+        return new BitmapDrawable(ctx.getResources(), fit(b, r));
+    }
+
+    /** The bounds of a bitmap's visible pixels, or null when it has none. */
+    private static Rect ink(Bitmap b) {
+        int n = b.getWidth(), left = n, top = n, right = -1, bottom = -1;
+        int[] px = new int[n * n];
+        b.getPixels(px, 0, n, 0, 0, n, n);
+        for (int i = 0; i < px.length; i++)
+            if (px[i] >>> 24 > 20) { left = Math.min(left, i % n); right = Math.max(right, i % n); top = Math.min(top, i / n); bottom = Math.max(bottom, i / n); }
+        return right < 0 ? null : new Rect(left, top, right + 1, bottom + 1);
+    }
+
+    /** The bitmap's art, cropped to its bounds and scaled to fill what's shown, centred. */
+    private static Bitmap fit(Bitmap b, Rect r) {
+        int n = b.getWidth();
+        Bitmap out = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
+        float scale = n * SHOWN / Math.max(r.width(), r.height()), w = r.width() * scale / 2, h = r.height() * scale / 2;
+        new Canvas(out).drawBitmap(b, r, new android.graphics.RectF(n / 2f - w, n / 2f - h, n / 2f + w, n / 2f + h),
+            new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        b.recycle();
+        return out;
+    }
+
+    private static int lum(int p) {
+        return (2126 * ((p >> 16) & 0xFF) + 7152 * ((p >> 8) & 0xFF) + 722 * (p & 0xFF)) / 10000;
+    }
+
+    /** How much of a pixel to keep, by how close to white it is: nothing up to 35, everything from 115. */
+    private static int keep(int v) {
+        return Math.max(0, Math.min(255, (v - 35) * 255 / 80));
     }
 
     static void launch(Context ctx, App app, View from, Rect bounds) {
