@@ -8,8 +8,11 @@ import android.content.SharedPreferences;
 import android.content.pm.LauncherActivityInfo;
 import android.content.pm.LauncherApps;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.AdaptiveIconDrawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
 import android.os.Process;
@@ -29,7 +32,8 @@ final class Apps {
     static final class App {
         final ComponentName component;
         final String label;
-        /** The icon's monochrome layer (Android 13 themed icons), else its foreground layer or the whole legacy icon, tinted alike. */
+        /** The icon's monochrome layer (Android 13 themed icons), else its foreground layer or the whole legacy icon, tinted alike;
+         *  or, when those would tint into a solid block or nothing, the original icon with its brightness as the glyph. */
         final Drawable glyph;
         /** A favourite's folder: the apps in the little ring that pops out of its drop. */
         final List<App> folder = new ArrayList<>();
@@ -53,11 +57,49 @@ final class Apps {
             Drawable glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getMonochrome() : null;
             if (glyph == null) glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getForeground()
                 : new InsetDrawable(icon, 1 / 3f); // a legacy icon goes in the middle third, where a monochrome layer keeps its glyph
-            out.add(new App(info.getComponentName(), info.getLabel().toString(), glyph.mutate()));
+            out.add(new App(info.getComponentName(), info.getLabel().toString(), untintable(glyph) ? luminance(ctx, icon) : glyph.mutate()));
         }
         Collator c = Collator.getInstance();
         out.sort((a, b) -> c.compare(a.label, b.label));
         return out;
+    }
+
+    /** Whether the glyph tints into nothing useful: more than 93% of its middle third (the part a drop shows) opaque, a solid
+     *  block; or under 2%, an empty layer whose art is all in the background. */
+    static boolean untintable(Drawable glyph) {
+        int n = 108;
+        Bitmap b = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
+        Drawable d = glyph.getConstantState() == null ? glyph : glyph.getConstantState().newDrawable();
+        d.setBounds(0, 0, n, n);
+        d.draw(new Canvas(b));
+        int[] px = new int[36 * 36];
+        b.getPixels(px, 0, 36, 36, 36, 36, 36);
+        b.recycle();
+        int opaque = 0;
+        for (int p : px) if (p >>> 24 > 127) opaque++;
+        // YouTube's themed glyph fills 91%, the real blocks 96% and up; Brother Mobile Connect's foreground 0%
+        return opaque > px.length * 93 / 100 || opaque < px.length * 2 / 100;
+    }
+
+    /** The original icon as a glyph: its colours inverted, what is then near white kept, so the theme's tint shades it like the others.
+     *  Inset so it sits a little larger than a monochrome glyph in its 108-unit canvas. */
+    static Drawable luminance(Context ctx, Drawable icon) {
+        int n = 192;
+        Bitmap b = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888);
+        icon.setBounds(n / 4, n / 4, n * 3 / 4, n * 3 / 4);
+        icon.draw(new Canvas(b));
+        int[] px = new int[n * n];
+        b.getPixels(px, 0, n, 0, 0, n, n);
+        for (int i = 0; i < px.length; i++) {
+            int p = px[i], a = p >>> 24;
+            // getPixels gives unpremultiplied colour, so weight brightness by the pixel's own alpha
+            int lum = (2126 * ((p >> 16) & 0xFF) + 7152 * ((p >> 8) & 0xFF) + 722 * (p & 0xFF)) / 10000;
+            // inverted, only what is near white stays (a short ramp keeps the edges smooth); the rest goes clear
+            int keep = Math.max(0, Math.min(255, (255 - lum - 35) * 255 / 80));
+            px[i] = (keep * a / 255) << 24 | 0xFFFFFF;
+        }
+        b.setPixels(px, 0, n, 0, 0, n, n);
+        return new BitmapDrawable(ctx.getResources(), b);
     }
 
     static void launch(Context ctx, App app, View from, Rect bounds) {
