@@ -11,6 +11,7 @@ import android.content.pm.ResolveInfo;
 import android.graphics.Rect;
 import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.InsetDrawable;
 import android.os.Process;
 import android.provider.MediaStore;
 import android.view.View;
@@ -28,7 +29,7 @@ final class Apps {
     static final class App {
         final ComponentName component;
         final String label;
-        /** The icon's monochrome layer (Android 13 themed icons), or null: then the first letter is drawn. */
+        /** The icon's monochrome layer (Android 13 themed icons), else its foreground layer or the whole legacy icon, tinted alike. */
         final Drawable glyph;
         /** A favourite's folder: the apps in the little ring that pops out of its drop. */
         final List<App> folder = new ArrayList<>();
@@ -50,7 +51,9 @@ final class Apps {
             if (info.getComponentName().getPackageName().equals(ctx.getPackageName())) continue;
             Drawable icon = info.getIcon(0);
             Drawable glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getMonochrome() : null;
-            out.add(new App(info.getComponentName(), info.getLabel().toString(), glyph == null ? null : glyph.mutate()));
+            if (glyph == null) glyph = icon instanceof AdaptiveIconDrawable ? ((AdaptiveIconDrawable) icon).getForeground()
+                : new InsetDrawable(icon, 1 / 3f); // a legacy icon goes in the middle third, where a monochrome layer keeps its glyph
+            out.add(new App(info.getComponentName(), info.getLabel().toString(), glyph.mutate()));
         }
         Collator c = Collator.getInstance();
         out.sort((a, b) -> c.compare(a.label, b.label));

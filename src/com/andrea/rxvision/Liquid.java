@@ -100,7 +100,7 @@ final class Liquid extends View {
     private static final long JOIN_MS = 380;     // rejoining: two tails reach out from the core and the finger and meet
     private long joinAt = -JOIN_MS;
     private float snapLen;
-    private final Paint inkPaint = new Paint(Paint.ANTI_ALIAS_FLAG), clockPaint, datePaint, glyphPaint;
+    private final Paint inkPaint = new Paint(Paint.ANTI_ALIAS_FLAG), clockPaint, datePaint;
     private int top, bottom; // system bar insets
     private boolean open, swiping;
     private Drop hover;
@@ -127,7 +127,6 @@ final class Liquid extends View {
         dp = getResources().getDisplayMetrics().density;
         clockPaint = text(serif, glyph, 46);
         datePaint = text(italic, fg, 24);
-        glyphPaint = text(serif, glyph, 30);
         core.r = core.tr = 82 * dp;
 
         ink = new View(ctx) {
@@ -867,17 +866,11 @@ final class Liquid extends View {
                 * (flood == null || flood == d ? 1 : 0)); // and the flood swallows the others
             if (alpha == 0) continue;
             float gr = Math.min(d.r, HOVER * dp);
-            if (d.app.glyph != null) {
-                int s = (int) (gr * 1.05f); // a monochrome layer is a 108-unit canvas with the glyph in its middle third
-                d.app.glyph.setTint(glyph);
-                d.app.glyph.setAlpha(alpha);
-                d.app.glyph.setBounds((int) d.x - s, (int) d.y - s, (int) d.x + s, (int) d.y + s);
-                d.app.glyph.draw(c);
-            } else {
-                glyphPaint.setAlpha(alpha);
-                glyphPaint.setTextSize(gr * 0.9f);
-                c.drawText(d.app.label.substring(0, 1), d.x, d.y + gr * 0.3f, glyphPaint);
-            }
+            int s = (int) (gr * 1.05f); // a monochrome layer is a 108-unit canvas with the glyph in its middle third
+            d.app.glyph.setTint(glyph);
+            d.app.glyph.setAlpha(alpha);
+            d.app.glyph.setBounds((int) d.x - s, (int) d.y - s, (int) d.x + s, (int) d.y + s);
+            d.app.glyph.draw(c);
         }
 
         if (clockAlpha > 0.01f) {

@@ -180,19 +180,14 @@ final class RingEditor extends View {
             letter.setColor(theme.glyph);
         }
         Drawable g = glyphs.get(a.component);
-        if (g == null && a.glyph != null) {
+        if (g == null) {
             g = a.glyph.getConstantState().newDrawable().mutate();
             g.setTint(theme.glyph);
             g.setAlpha(255);
             glyphs.put(a.component, g);
         }
-        if (g != null) {
-            int s = (int) (r * 1.05f);
-            g.setBounds((int) x - s, (int) y - s, (int) x + s, (int) y + s);
-            g.draw(c);
-        } else {
-            letter.setTextSize(r * 0.9f);
-            c.drawText(a.label.substring(0, 1), x, y + r * 0.3f, letter);
-        }
+        int s = (int) (r * 1.05f);
+        g.setBounds((int) x - s, (int) y - s, (int) x + s, (int) y + s);
+        g.draw(c);
     }
 }

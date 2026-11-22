@@ -270,29 +270,17 @@ final class AllApps extends LinearLayout {
         row.setTag(bar);
 
         int size = (int) (22 * dp);
-        if (app.glyph != null) {
-            ImageView icon = new ImageView(getContext());
-            Drawable g = app.glyph.getConstantState().newDrawable().mutate(); // the drops tint theirs the background
-            g.setTint(INK);
-            g.setAlpha(255); // the copy inherits whatever fade the drop was last drawn with
-            icon.setImageDrawable(g);
-            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            // The glyph sits in the middle third of its canvas: draw the canvas larger so it reads at 22dp.
-            int big = (int) (size * 2.2f);
-            LayoutParams lp = new LayoutParams(big, big);
-            lp.setMargins(-(big - size) / 2, -(big - size) / 2, -(big - size) / 2 + (int) (14 * dp), -(big - size) / 2);
-            row.addView(icon, lp);
-        } else {
-            TextView letter = new TextView(getContext());
-            letter.setText(app.label.substring(0, 1));
-            letter.setTypeface(serif);
-            letter.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-            letter.setTextColor(INK);
-            letter.setGravity(Gravity.CENTER);
-            LayoutParams lp = new LayoutParams(size, size);
-            lp.rightMargin = (int) (14 * dp);
-            row.addView(letter, lp);
-        }
+        ImageView icon = new ImageView(getContext());
+        Drawable g = app.glyph.getConstantState().newDrawable().mutate(); // the drops tint theirs the background
+        g.setTint(INK);
+        g.setAlpha(255); // the copy inherits whatever fade the drop was last drawn with
+        icon.setImageDrawable(g);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        // The glyph sits in the middle third of its canvas: draw the canvas larger so it reads at 22dp.
+        int big = (int) (size * 2.2f);
+        LayoutParams lp = new LayoutParams(big, big);
+        lp.setMargins(-(big - size) / 2, -(big - size) / 2, -(big - size) / 2 + (int) (14 * dp), -(big - size) / 2);
+        row.addView(icon, lp);
 
         TextView name = new TextView(getContext());
         name.setText(app.label);
